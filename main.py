@@ -152,10 +152,8 @@ class PasswordManager(QMainWindow, Ui_MainWindow):
                     QMessageBox.information(self, "Password Retrieved",f'The password to {username} at {website} is {password}.')
                     user_found = True
                     break
-            if not user_found:
+        if not user_found:
                  QMessageBox.warning(self, 'Error',"Website or username does not exist.")
-            else:
-                QMessageBox.warning(self,"Input Error", "All fields must be filled.")
             
 
     def delete_password(self):
