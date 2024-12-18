@@ -1,7 +1,7 @@
 # Jax's Password Manager
 
 ## Overview
-Jax's Password Manager is a simple password management application built with Python, PyQt, and the cryptography library. It allows you to securely store, delete, and retrieve passwords for different websites. 
+Jax's Password Manager is a simple password management application built with Python, SQLite, PyQt, and the cryptography library. It allows you to securely store, delete, and retrieve passwords for different websites. 
 
 ## Getting Started
 ### Prerequisites
