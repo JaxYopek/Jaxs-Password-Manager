@@ -1,3 +1,4 @@
+import sqlite3
 import sys
 import hashlib
 from cryptography.fernet import Fernet
@@ -5,6 +6,21 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QInputDialog
 import json
 from password_manager_ui import Ui_MainWindow
 
+db_file = "password_manager.db"
+def connect():
+    global connection, cursor
+    connection = sqlite3.connect(db_file)
+    cursor = connection.cursor()
+    cursor.execute(' PRAGMA foreign_keys=ON; ')
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS passwords (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        website TEXT NOT NULL,
+        username TEXT NOT NULL,
+        password TEXT NOT NULL
+    )
+        ''')
+    connection.commit()
 
 
 # Hash master password
@@ -43,7 +59,8 @@ class PasswordManager(QMainWindow, Ui_MainWindow):
         super().__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-        self.setWindowTitle("Jax's Password Manager")
+        self.setWindowTitle("Password Manager")
+        connect()
 
         # Connect buttons to respective functions
         self.ui.addpassword_button.clicked.connect(self.add_password)
@@ -94,67 +111,70 @@ class PasswordManager(QMainWindow, Ui_MainWindow):
         return Fernet(self.key).decrypt(encrypted_password.encode()).decode()
 
     def add_password(self):
-        
+            
         website = self.ui.website_entry.text()
         username = self.ui.username_entry.text()
         password = self.ui.password_entry.text()
         encrypted_password = self.encrypt_password(password)
-
         if not website or not username or not password:
             QMessageBox.warning(self,"Input Error", "All fields must be filled.")
             return
-        try:
-            with open('passwords.json', 'r') as file:
-                data = json.load(file)
-        except:
-            data = []
 
-        #Store password information in the form of a dictionary
-        password_information = {'website': website,'username': username, 'password': encrypted_password}
 
-        # Update password if website and username exist
-        user_found = False
-        for credential in data:
-            if credential['website'] == website and credential['username'] == username:
-                data.remove(credential)
-                QMessageBox.information(self, "Success", "Password has been updated.")
-                user_found = True
-                break
-        data.append(password_information)
+        cursor.execute('SELECT id FROM passwords WHERE website = ? AND username = ?', (website, username))
+        result = cursor.fetchone()
 
-        # Save updated password details to file
-        with open('passwords.json','w') as file:
-            json.dump(data,file, indent = 4)
-        if not user_found:
-            QMessageBox.information(self,"Success", "Password added successfully.")
+        if result:
+            # Update existing record
+            cursor.execute('''
+                UPDATE passwords 
+                SET password = ? 
+                WHERE website = ? AND username = ?
+            ''', (encrypted_password, website, username))
+            QMessageBox.information(self, "Success", "Password has been updated.")
+            self.ui.username_entry.clear()
+            self.ui.website_entry.clear()
+            self.ui.password_entry.clear()
+        else:
+            # Insert new record
+            cursor.execute('''
+                INSERT INTO passwords (website, username, password) 
+                VALUES (?, ?, ?)
+            ''', (website, username, encrypted_password))
+            QMessageBox.information(self, "Success", "Password added successfully.")
+            self.ui.username_entry.clear()
+            self.ui.website_entry.clear()
+            self.ui.password_entry.clear()
+        connection.commit()
+
+
+
         
     def get_password(self):
         website = self.ui.website_entry.text()
         username = self.ui.username_entry.text()
 
         if not website or not username:
-            QMessageBox(self,"Input Error", "Both website and username fields must be filled.")
+            QMessageBox.warning(self,"Input Error", "Both website and username fields must be filled.")
             return
         
-        try:
-            with open('passwords.json', 'r') as file:
-                data = json.load(file)
-        except:
-            QMessageBox(self,"Error", "No existing password data.")
-        
-
-        # Retrieve password if the username and website exist
-        user_found = False
-        for credential in data:
-            if credential['website'] == website and  credential['username'] == username:
-                    encrypted_password = credential['password']
-                    password = self.decrypt_password(encrypted_password)
-                    QMessageBox.information(self, "Password Retrieved",f'The password to {username} at {website} is {password}.')
-                    user_found = True
-                    break
-        if not user_found:
-                 QMessageBox.warning(self, 'Error',"Website or username does not exist.")
-            
+        cursor.execute('''
+                        SELECT password 
+                       FROM passwords 
+                       WHERE username = ? AND
+                       website = ?
+                       ''', (username, website))
+        result = cursor.fetchone()
+        if result:
+            encrypted_password = result[0]
+            password = self.decrypt_password(encrypted_password)
+            show_password(self, website, password)
+            self.ui.username_entry.clear()
+            self.ui.website_entry.clear()
+        else:
+            QMessageBox.warning(self, 'Error', "Website or username does not exist.")
+            self.ui.username_entry.clear()
+            self.ui.website_entry.clear()
 
     def delete_password(self):
         website = self.ui.website_entry.text()
@@ -168,30 +188,48 @@ class PasswordManager(QMainWindow, Ui_MainWindow):
                                  f"Are you sure you want to delete the password for {username} at {website}?",
                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            try:
-                with open('passwords.json', 'r') as file:
-                    data = json.load(file)
-            except FileNotFoundError:
-                QMessageBox(self,"Error", "No existing password data.")
-                return
-            
-            # If the website and username exist, remove the user credentials from the list
-            user_found = False
-            for credential in data:
-                if credential['website'] == website and credential['username'] == username:
-                    data.remove(credential)
-                    user_found = True
-                    break
-            # Save updated password details to the file
-            if user_found:
-                with open('passwords.json', 'w') as file:
-                    json.dump(data, file, indent=4)
-                QMessageBox.information(self, "Success", f'Password for {username} at {website} has been deleted.')
-            else:
+            cursor.execute('''
+                            DELETE FROM passwords 
+                           WHERE website = ? AND username = ?
+                           ''', (website, username))
+            if cursor.rowcount == 0:
                 QMessageBox.warning(self, "Error", "Website or username not found.")
+                self.ui.username_entry.clear()
+                self.ui.website_entry.clear()
+                self.ui.password_entry.clear()
+            else:
+                QMessageBox.information(self, "Password Deleted", f'The password for {website} has been deleted successfully.')
+                self.ui.username_entry.clear()
+            self.ui.website_entry.clear()
+            self.ui.password_entry.clear()
         else:
             QMessageBox.information(self, "Cancelled", "Password deletion has been cancelled.")
+            
+        connection.commit()
 
+def show_password(self, website, password):
+    # Create a custom QMessageBox
+    msg_box = QMessageBox(self)
+    msg_box.setWindowTitle("Password Retrieved!")
+    msg_box.setText(f'The password to {website} is {password}.')
+
+    # Add the standard information button
+    msg_box.setStandardButtons(QMessageBox.Ok)
+
+    # Add a custom button for "Copy to Clipboard"
+    copy_button = msg_box.addButton("Copy to Clipboard", QMessageBox.ActionRole)
+
+    # Show the message box
+    msg_box.exec_()
+
+    # Get the clicked button
+    clicked_button = msg_box.clickedButton()
+
+    if clicked_button == copy_button:
+    # Copy the password to the clipboard
+        clipboard = QApplication.clipboard()
+        clipboard.setText(password)  # Copy password to clipboard
+        print("Password copied to clipboard.")
 
             
 if __name__ =='__main__':
