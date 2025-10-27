@@ -46,7 +46,7 @@ python main.py
 Feel free to submit issues or pull requests to improve the application. Any feedback is appreciated!
 
 ## License
-Distributed under the MIT License. See LICENSE.md for more information..
+Distributed under the MIT License. See LICENSE.md for more information.
 
 ## Acknowledgments 
 [The Python Code: How to Build a Password Manager in Python](https://thepythoncode.com/article/build-a-password-manager-in-python)
