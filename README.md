@@ -43,7 +43,7 @@ python main.py
    - Click on the trash can to delete the password.
   
 ## Contributing
-Feel free to submit issues or pull requests to improve the application. Any feedback is appreciated.
+Feel free to submit issues or pull requests to improve the application. Any feedback is appreciated!
 
 ## License
 Distributed under the MIT License. See LICENSE.md for more information.
